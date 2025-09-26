@@ -1,0 +1,336 @@
+/*
+  rotina.c
+  Programa: Rotina de Atividade Física
+  Objetivo: demonstrar laços (while, for, do-while), decisões (if/switch),
+            funções, validação de entrada, gravação em arquivo e interação com usuário.
+  Compilar: gcc -std=c99 -Wall -o rotina rotina.c
+*/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define MAX_EXERCICIOS 100
+#define MAX_NOME 60
+
+/* Estrutura para armazenar um exercício */
+typedef struct {
+    char nome[MAX_NOME];
+    int duracao_min;          /* duração em minutos */
+    int repeticoes;           /* 0 se não aplicável */
+    int series;               /* número de séries (0 se não aplicável) */
+    int intensidade;          /* 1 = baixa, 2 = média, 3 = alta */
+    double calorias_estimadas;/* total de calorias estimadas para a duração informada */
+    char observacao[100];
+} Exercicio;
+
+
+/* ---------- Protótipos de funções ---------- */
+void mostrar_apresentacao(void);
+int ler_inteiro_validado(int min, int max, const char *prompt);
+double ler_double_validado(double min, double max, const char *prompt);
+void ler_string_limpa(const char *prompt, char *dest, int maxlen);
+void estimar_calorias_por_exercicio(Exercicio *e, double peso_kg);
+void adicionar_exercicio(Exercicio lista[], int *qtd, double peso_kg);
+void listar_exercicios(Exercicio lista[], int qtd);
+void gerar_plano_semanal(Exercicio lista[], int qtd);
+void salvar_rotina_arquivo(Exercicio lista[], int qtd, double peso_kg);
+void remover_exercicio(Exercicio lista[], int *qtd);
+void limpar_tela_simples(void);
+
+/* ---------- Função principal ---------- */
+int main(void) {
+    Exercicio rotina[MAX_EXERCICIOS];
+    int qtd = 0;
+    int opcao;
+    int sair = 0;
+    double peso_kg;
+
+    mostrar_apresentacao();
+
+    /* Solicita peso do usuário para estimativa de calorias (com validação) */
+    peso_kg = ler_double_validado(30.0, 300.0, "Informe seu peso em kg (ex: 70.5): ");
+
+    /* Loop principal do menu - usa while */
+    while (!sair) {
+        printf("\n==== MENU: Rotina de Atividade Física ====\n");
+        printf("1) Adicionar exercício à rotina\n");
+        printf("2) Listar exercícios cadastrados\n");
+        printf("3) Remover um exercício\n");
+        printf("4) Gerar plano semanal automático (BÔNUS)\n");
+        printf("5) Salvar rotina em arquivo (rotina.txt)\n");
+        printf("6) Limpar tela\n");
+        printf("0) Sair\n");
+        opcao = ler_inteiro_validado(0, 6, "Escolha uma opção: ");
+
+        /* Tratamento das opções com switch */
+        switch (opcao) {
+            case 1:
+                adicionar_exercicio(rotina, &qtd, peso_kg);
+                break;
+            case 2:
+                listar_exercicios(rotina, qtd);
+                break;
+            case 3:
+                remover_exercicio(rotina, &qtd);
+                break;
+            case 4:
+                gerar_plano_semanal(rotina, qtd);
+                break;
+            case 5:
+                salvar_rotina_arquivo(rotina, qtd, peso_kg);
+                break;
+            case 6:
+                limpar_tela_simples();
+                break;
+            case 0:
+                printf("\nObrigado por usar o sistema de Rotina de Atividade Física!\n");
+                printf("Boas práticas: aqueça antes, alongue depois e mantenha hidratação.\n");
+                sair = 1;
+                break;
+            default:
+                /* Não deveria chegar aqui, porque ler_inteiro_validado já valida */
+                printf("Opção inválida.\n");
+        }
+    }
+
+    return 0;
+}
+
+/* ---------- Implementações das funções ---------- */
+
+/* Mostra apresentação do sistema e descrição do tema + bônus */
+void mostrar_apresentacao(void) {
+    printf("=============================================\n");
+    printf("   SISTEMA DE ROTINA DE ATIVIDADE FÍSICA\n");
+    printf("=============================================\n");
+    printf("Descrição: Este programa ajuda a montar e gerenciar uma rotina\n");
+    printf("de exercícios (nome, duração, re series, petições, intensidade) e estima\n");
+    printf("as calorias gastas com base no seu peso.\n\n");
+    printf("BÔNUS incluído:\n");
+    printf("- Geração automática de um plano semanal simples\n");
+    printf("- Opção para salvar a rotina em arquivo texto\n\n");
+}
+
+/* Lê e valida um inteiro entre min e max (usa fgets + strtol para robustez) */
+int ler_inteiro_validado(int min, int max, const char *prompt) {
+    char buffer[128];
+    long valor;
+    char *endptr;
+    do {
+        printf("%s", prompt);
+        if (!fgets(buffer, sizeof(buffer), stdin)) {
+            printf("Erro de leitura. Tente novamente.\n");
+            continue;
+        }
+        valor = strtol(buffer, &endptr, 10);
+        /* Aceita linhas terminadas em '\n' ou '\r' ou '\0' */
+        if (endptr == buffer || (*endptr != '\n' && *endptr != '\0' && *endptr != '\r')) {
+            printf("Entrada inválida. Digite um número inteiro.\n");
+            continue;
+        }
+        if (valor < min || valor > max) {
+            printf("Valor fora do intervalo permitido (%d a %d). Tente novamente.\n", min, max);
+            continue;
+        }
+        return (int)valor;
+    } while (1);
+}
+
+/* Lê e valida um double entre min e max */
+double ler_double_validado(double min, double max, const char *prompt) {
+    char buffer[128];
+    double valor;
+    char *endptr;
+    do {
+        printf("%s", prompt);
+        if (!fgets(buffer, sizeof(buffer), stdin)) {
+            printf("Erro de leitura. Tente novamente.\n");
+            continue;
+        }
+        valor = strtod(buffer, &endptr);
+        if (endptr == buffer || (*endptr != '\n' && *endptr != '\0' && *endptr != '\r')) {
+            printf("Entrada inválida. Digite um número (ex: 70.5).\n");
+            continue;
+        }
+        if (valor < min || valor > max) {
+            printf("Valor fora do intervalo válido (%.1f - %.1f). Tente novamente.\n", min, max);
+            continue;
+        }
+        return valor;
+    } while (1);
+}
+
+/* Lê uma string com fgets e remove '\n' final */
+void ler_string_limpa(const char *prompt, char *dest, int maxlen) {
+    char buffer[256];
+    do {
+        printf("%s", prompt);
+        if (!fgets(buffer, sizeof(buffer), stdin)) {
+            buffer[0] = '\0';
+        }
+        /* Remove final newline/carriage return */
+        size_t len = strlen(buffer);
+        while (len > 0 && (buffer[len-1] == '\n' || buffer[len-1] == '\r')) {
+            buffer[--len] = '\0';
+        }
+        if (len == 0) {
+            printf("Entrada vazia. Por favor, digite algo.\n");
+            continue;
+        }
+        /* Copia até maxlen-1 caracteres */
+        strncpy(dest, buffer, maxlen-1);
+        dest[maxlen-1] = '\0';
+        break;
+    } while (1);
+}
+
+/* Estima calorias baseado em MET (simplificado) */
+void estimar_calorias_por_exercicio(Exercicio *e, double peso_kg) {
+    double met;
+    /* Escolhe MET aproximado conforme intensidade */
+    if (e->intensidade == 1) met = 3.0;       /* baixa intensidade */
+    else if (e->intensidade == 2) met = 6.0;  /* média intensidade */
+    else met = 8.0;                            /* alta intensidade */
+
+    /* Fórmula: calorias por minuto = (MET × 3.5 × peso_kg) / 200 */
+    double cal_por_min = (met * 3.5 * peso_kg) / 200.0;
+    e->calorias_estimadas = cal_por_min * (double)e->duracao_min;
+}
+
+/* Adiciona um exercício ao vetor (valida entradas) */
+void adicionar_exercicio(Exercicio lista[], int *qtd, double peso_kg) {
+    if (*qtd >= MAX_EXERCICIOS) {
+        printf("Limite de exercícios atingido (%d).\n", MAX_EXERCICIOS);
+        return;
+    }
+    Exercicio novo;
+    printf("\n--- Adicionar Exercício ---\n");
+    ler_string_limpa("Nome do exercício (ex: Corrida, Agachamento): ", novo.nome, MAX_NOME);
+    novo.duracao_min = ler_inteiro_validado(1, 600, "Duração em minutos (1-600): ");
+    /* Pergunta se há repetições (0 se não) */
+    novo.repeticoes = ler_inteiro_validado(0, 10000, "Número de repetições (0 se não aplicável): ");
+    novo.series = ler_inteiro_validado(0,1000,"número de series(0 se não aplicavel");
+    printf("Intensidade: 1) Baixa  2) Média  3) Alta\n");
+    novo.intensidade = ler_inteiro_validado(1, 3, "Escolha intensidade (1-3): ");
+    /* Observação opcional */
+    printf("Observação breve (opcional). Pressione Enter para pular:\n");
+    /* Usa fgets direto para pegar possível linha vazia */
+    char obs[100];
+    if (fgets(obs, sizeof(obs), stdin)) {
+        size_t len = strlen(obs);
+        while (len > 0 && (obs[len-1] == '\n' || obs[len-1] == '\r')) obs[--len] = '\0';
+        if (len == 0) strcpy(novo.observacao, "Nenhuma");
+        else strncpy(novo.observacao, obs, sizeof(novo.observacao)-1);
+    } else {
+        strcpy(novo.observacao, "Nenhuma");
+    }
+    /* Calcula estimativa de calorias usando o peso informado anteriormente */
+    estimar_calorias_por_exercicio(&novo, peso_kg);
+
+    /* Adiciona ao vetor */
+    lista[*qtd] = novo;
+    (*qtd)++;
+    printf("Exercício '%s' adicionado com sucesso! Estimativa calorias: %.2f kcal\n",
+           novo.nome, novo.calorias_estimadas);
+}
+
+/* Lista todos os exercícios (usa for) */
+void listar_exercicios(Exercicio lista[], int qtd) {
+    if (qtd == 0) {
+        printf("\nNenhum exercício cadastrado ainda.\n");
+        return;
+    }
+    printf("\n--- Exercícios cadastrados (%d) ---\n", qtd);
+    for (int i = 0; i < qtd; i++) {
+        printf("[%d] %s\n", i+1, lista[i].nome);
+        printf("     Duração: %d min | Repetições: %d | Séries: %d | Intensidade: %d | Calorias estimadas: %.2f kcal\n",
+       lista[i].duracao_min, lista[i].repeticoes, lista[i].series, lista[i].intensidade, lista[i].calorias_estimadas);
+
+        printf("     Observação: %s\n", lista[i].observacao);
+    }
+}
+
+/* Remove um exercício (validação e deslocamento de vetor) */
+void remover_exercicio(Exercicio lista[], int *qtd) {
+    if (*qtd == 0) {
+        printf("\nNada a remover. A lista está vazia.\n");
+        return;
+    }
+    listar_exercicios(lista, *qtd);
+    int idx = ler_inteiro_validado(0, *qtd, "Digite o número do exercício a remover (0 para cancelar): ");
+    if (idx == 0) {
+        printf("Remoção cancelada.\n");
+        return;
+    }
+    idx--; /* converter para índice 0-based */
+    printf("Removendo '%s'...\n", lista[idx].nome);
+    /* desloca os elementos à esquerda */
+    for (int i = idx; i < (*qtd) - 1; i++) {
+        lista[i] = lista[i+1];
+    }
+    (*qtd)--;
+    printf("Removido com sucesso. Agora há %d exercício(s).\n", *qtd);
+}
+
+/* Gera um plano semanal automático (bônus). Usa for e decisões internas. */
+void gerar_plano_semanal(Exercicio lista[], int qtd) {
+    if (qtd == 0) {
+        printf("\nNão há exercícios cadastrados para gerar o plano. Adicione exercícios primeiro.\n");
+        return;
+    }
+    const char *dias[7] = {"Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"};
+    printf("\n--- Plano Semanal Automático ---\n");
+    /* Usamos um loop for para as 7 dias e alternamos os exercícios armazenados */
+    for (int dia = 0; dia < 7; dia++) {
+        int escolha = dia % qtd; /* simples rotação */
+        /* Sugestão de ajuste de duração: dias ativos vs recuperação */
+        int duracao_sugerida = lista[escolha].duracao_min;
+        /* Se for fim de semana, sugerimos 80% da duração original como recuperação */
+        if (dia == 5 || dia == 6) duracao_sugerida = (int)(duracao_sugerida * 0.8);
+        printf("%s: %s - %d min (Intensidade %d) | Calorias estimadas aproximadas: %.2f kcal\n",
+               dias[dia], lista[escolha].nome, duracao_sugerida, lista[escolha].intensidade,
+               (lista[escolha].calorias_estimadas / (double)lista[escolha].duracao_min) * duracao_sugerida);
+    }
+    printf("\nDica: altere intensidade e duração conforme seu nível. Descanse ao menos 1 dia se sentir fadiga.\n");
+}
+
+/* Salva rotina em arquivo texto */
+void salvar_rotina_arquivo(Exercicio lista[], int qtd, double peso_kg) {
+    if (qtd == 0) {
+        printf("\nNada a salvar. Não há exercícios cadastrados.\n");
+        return;
+    }
+    FILE *fp = fopen("rotina.txt", "w");
+    if (!fp) {
+        printf("Erro ao abrir arquivo para escrita.\n");
+        return;
+    }
+    time_t t = time(NULL);
+    fprintf(fp, "Rotina de Atividade Física - Gerado em: %s\n", ctime(&t));
+    fprintf(fp, "Peso usado para estimativa: %.2f kg\n\n", peso_kg);
+    fprintf(fp, "Lista de exercícios (%d):\n", qtd);
+    for (int i = 0; i < qtd; i++) {
+        fprintf(fp, "%d) %s\n   Duracao: %d min | Repeticoes: %d | Intensidade: %d\n   Calorias estimadas: %.2f kcal\n   Observacao: %s\n\n",
+                i+1, lista[i].nome, lista[i].duracao_min, lista[i].repeticoes, lista[i].intensidade,
+                lista[i].calorias_estimadas, lista[i].observacao);
+    }
+    fprintf(fp, "---- Plano semanal sugerido (simples) ----\n");
+    const char *dias[7] = {"Segunda","Terca","Quarta","Quinta","Sexta","Sabado","Domingo"};
+    for (int dia = 0; dia < 7; dia++) {
+        int escolha = dia % qtd;
+        int duracao_sugerida = lista[escolha].duracao_min;
+        if (dia == 5 || dia == 6) duracao_sugerida = (int)(duracao_sugerida * 0.8);
+        double cal_sug = (lista[escolha].calorias_estimadas / (double)lista[escolha].duracao_min) * duracao_sugerida;
+        fprintf(fp, "%s: %s - %d min | Est. Calorias: %.2f kcal\n",
+                dias[dia], lista[escolha].nome, duracao_sugerida, cal_sug);
+    }
+    fclose(fp);
+    printf("Rotina salva com sucesso em 'rotina.txt' no diretório atual.\n");
+}
+
+/* Limpa a tela de forma simples (apenas várias quebras de linha para portabilidade) */
+void limpar_tela_simples(void) {
+    for (int i = 0; i < 40; i++) putchar('\n');
+}
